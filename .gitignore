@@ -1,0 +1,14 @@
+# 数据库（含个人测试/session 数据，禁止入库）
+*.db
+*.db-shm
+*.db-wal
+runtime/
+
+# Python 缓存
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 环境与密钥
+.env
+*.key

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Memory Hub 控制台</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --line:#e3e6ea; --tx:#26292e; --sub:#7a8089;
+          --pri:#2f6fed; --ok:#1a9c6b; --bad:#d84b4b; --warn:#c98a1d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.6 "Microsoft YaHei",system-ui,sans-serif;
+         background:var(--bg); color:var(--tx); }
+  header { background:#1f2430; color:#fff; padding:12px 24px; display:flex;
+           align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; }
+  #mode { font-size:12px; padding:2px 10px; border-radius:10px; }
+  .pill { font-size:12px; padding:2px 10px; border-radius:10px; }
+  .pill.full { background:#1a9c6b; } .pill.degraded { background:#c98a1d; }
+  .pill.vec-only { background:#2f6fed; }
+  main { max-width:1100px; margin:20px auto; padding:0 16px; }
+  nav { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  nav button { border:1px solid var(--line); background:#fff; padding:7px 18px;
+               border-radius:8px; cursor:pointer; font-size:14px; }
+  nav button.on { background:var(--pri); color:#fff; border-color:var(--pri); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:14px; }
+  .card h3 { margin:0 0 10px; font-size:14px; color:var(--sub); font-weight:600; }
+  label { font-size:12px; color:var(--sub); display:block; margin:8px 0 3px; }
+  input[type=text], textarea, select { width:100%; padding:7px 10px;
+       border:1px solid var(--line); border-radius:7px; font:inherit; background:#fff; }
+  textarea { resize:vertical; min-height:64px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .row > div { flex:1; min-width:150px; }
+  button.act { background:var(--pri); color:#fff; border:0; padding:8px 20px;
+               border-radius:7px; cursor:pointer; font-size:14px; }
+  button.act:disabled { background:#aab; cursor:wait; }
+  button.ghost { background:#fff; color:var(--tx); border:1px solid var(--line);
+                 padding:4px 12px; border-radius:6px; cursor:pointer; font-size:12px; }
+  .hint { font-size:12px; color:var(--sub); margin-top:6px; white-space:pre-wrap; }
+  .hit { border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+         margin:8px 0; }
+  .hit .meta { font-size:12px; color:var(--sub); margin-top:4px;
+               display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .tag { padding:1px 8px; border-radius:9px; font-size:11px; background:#eef1f6; }
+  .tag.active { background:#e2f5ec; color:var(--ok); }
+  .tag.invalidated { background:#faece2; color:var(--warn);
+                     text-decoration:line-through; }
+  .tag.archived { background:#eee; color:var(--sub); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { padding:6px 8px; border-bottom:1px solid var(--line); text-align:left;
+           vertical-align:top; }
+  th { color:var(--sub); font-weight:600; font-size:12px; }
+  .ev { font-size:12px; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .ev .t { color:var(--sub); margin-right:8px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  pre.mini { background:#f2f4f8; padding:8px; border-radius:6px; font-size:12px;
+             overflow:auto; max-height:260px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 Memory Hub 控制台</h1>
+  <span id="mode" class="pill degraded">检测中…</span>
+  <span style="font-size:12px;opacity:.7" id="dbinfo"></span>
+</header>
+<main>
+  <nav>
+    <button data-p="ask" class="on">问答</button>
+    <button data-p="mem">记忆库</button>
+    <button data-p="write">写入 / 抽取</button>
+    <button data-p="profile">画像 / 会话</button>
+    <button data-p="tools">入库 / 整理 / 基准</button>
+  </nav>
+
+  <!-- 问答 -->
+  <section id="p-ask">
+    <div class="card">
+      <h3>召回问答</h3>
+      <div class="row">
+        <div style="flex:3"><label>问题</label>
+          <input type="text" id="q" placeholder="例：你希望我怎么做周报 / 之前的汇报格式是什么">
+        </div>
+        <div><label>用户 (subject)</label><input type="text" id="qs" value="me"></div>
+        <div><label>类别过滤</label><select id="qkind">
+          <option value="">全部</option><option>preference</option><option>fact</option>
+          <option>decision</option><option>person</option><option>project</option>
+          <option>procedure</option>
+        </select></div>
+        <div><label>条数</label><input type="text" id="qk" value="5" style="width:60px"></div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="display:inline"><input type="checkbox" id="qinv"> 含失效历史</label>
+        <label style="display:inline;margin-left:14px"><input type="checkbox" id="qrr"> LLM 精排（较慢）</label>
+        <button class="act" id="qgo" style="margin-left:14px">提问</button>
+      </div>
+      <div id="qout" class="hint">提示：问句里带「之前 / 原来」会自动召回失效历史；接入向量后可用同义问法。</div>
+    </div>
+  </section>
+
+  <!-- 记忆库 -->
+  <section id="p-mem" style="display:none">
+    <div class="card">
+      <h3>记忆条目</h3>
+      <div class="row">
+        <div><label>用户 (subject，留空=全部)</label><input type="text" id="ms"></div>
+        <label style="display:inline;margin:0 0 8px"><input type="checkbox" id="mall"> 含失效/归档</label>
+        <button class="act" id="mgo">刷新</button>
+      </div>
+      <div id="mlist"></div>
+    </div>
+    <div class="card" id="mdetail" style="display:none">
+      <h3>条目详情 + 溯源 + 审计</h3>
+      <div id="mbody"></div>
+    </div>
+  </section>
+
+  <!-- 写入 -->
+  <section id="p-write" style="display:none">
+    <div class="card">
+      <h3>直接写入记忆</h3>
+      <div class="row">
+        <div style="flex:3"><label>内容</label>
+          <input type="text" id="wc" placeholder="例：汇报统一用表格格式"></div>
+        <div><label>类别</label><select id="wk">
+          <option>fact</option><option>preference</option><option>decision</option>
+          <option>person</option><option>project</option><option>procedure</option>
+        </select></div>
+        <div><label>实体(逗号分隔)</label><input type="text" id="we" placeholder="老王,对账"></div>
+        <div><label>用户</label><input type="text" id="ws" value="me"></div>
+      </div>
+      <button class="act" id="wgo" style="margin-top:10px">写入</button>
+      <div id="wout" class="hint"></div>
+    </div>
+    <div class="card">
+      <h3>对话抽取（从一段对话提取该记的内容）</h3>
+      <label>用户说的话</label>
+      <textarea id="eu">以后所有对账都先导出银行流水再逐笔核对，有问题直接找老王。</textarea>
+      <label>AI 回复（可留空）</label>
+      <textarea id="ea">好的，已记录。</textarea>
+      <label>定制规则（可选）</label>
+      <input type="text" id="ec" placeholder="例：只提取流程和联系人">
+      <button class="act" id="ego" style="margin-top:10px">抽取</button>
+      <div id="eout" class="hint"></div>
+    </div>
+  </section>
+
+  <!-- 画像 -->
+  <section id="p-profile" style="display:none">
+    <div class="card">
+      <h3>用户画像（L1 偏好聚合）</h3>
+      <div class="row">
+        <div><label>用户</label><input type="text" id="ps" value="me"></div>
+        <button class="act" id="pgo">查看</button>
+      </div>
+      <pre class="mini" id="pout" style="margin-top:10px"></pre>
+    </div>
+    <div class="card">
+      <h3>会话摘要（L3）</h3>
+      <div id="eps"></div>
+    </div>
+  </section>
+
+  <!-- 工具 -->
+  <section id="p-tools" style="display:none">
+    <div class="card">
+      <h3>文件夹入库（md/txt → 知识库）</h3>
+      <div class="row">
+        <div style="flex:2"><label>文件夹路径</label>
+          <input type="text" id="if_" placeholder="G:\某个文档目录"></div>
+        <div><label>用户 (subject)</label><input type="text" id="is" value="kb"></div>
+        <button class="act" id="igo">入库</button>
+      </div>
+      <div id="iout" class="hint"></div>
+    </div>
+    <div class="card">
+      <h3>sleep-time 整理（判重合并 + 冲突补扫）</h3>
+      <div class="row">
+        <div><label>用户（留空=全部）</label><input type="text" id="cs"></div>
+        <label style="display:inline;margin:0 0 8px"><input type="checkbox" id="cdry"> 仅预览（dry-run）</label>
+        <button class="act" id="cgo">执行整理</button>
+      </div>
+      <div id="cout" class="hint"></div>
+    </div>
+    <div class="card">
+      <h3>基准评测</h3>
+      <button class="act" id="bgo">运行（完整模式下约 1-2 分钟）</button>
+      <pre class="mini" id="bout" style="margin-top:10px"></pre>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? "").toString().replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// ---- tabs ----
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  ["ask","mem","write","profile","tools"].forEach(p =>
+    $("p-" + p).style.display = (b.dataset.p === p) ? "" : "none");
+});
+
+// ---- status ----
+async function refreshStatus() {
+  const s = await (await fetch("/api/status")).json();
+  $("mode").textContent = {full:"完整模式（LLM+向量）", degraded:"降级模式（仅关键词）",
+                           "vec-only":"仅向量"}[s.mode] || s.mode;
+  $("mode").className = "pill " + s.mode;
+  $("dbinfo").textContent = s.db;
+}
+refreshStatus();
+
+// ---- 问答 ----
+$("qgo").onclick = async () => {
+  $("qgo").disabled = true; $("qout").textContent = "检索中…";
+  try {
+    const body = {query:$("q").value, subject:$("qs").value,
+        k:+$("qk").value||5, include_invalidated:$("qinv").checked,
+        rerank:$("qrr").checked};
+    if ($("qkind").value) body.filters = {kind: $("qkind").value};
+    const r = await (await fetch("/api/recall", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)})).json();
+    if (!r.hits || !r.hits.length) { $("qout").innerHTML =
+      '<span class="bad">无命中</span>（换个问法，或先在「写入」页添加记忆）'; return; }
+    $("qout").innerHTML = r.hits.map(h => `
+      <div class="hit">
+        <div>${esc(h.content)}</div>
+        <div class="meta">
+          <span class="tag ${esc(h.status)}">${esc(h.status)}</span>
+          <span class="tag">${esc(h.kind)}</span>
+          <span class="tag">${esc(h.namespace)}</span>
+          ${h.entities && h.entities.length ? h.entities.map(e =>
+            '<span class="tag">@'+esc(e)+'</span>').join("") : ""}
+          <span>热度 ${h.hit_count||0}</span>
+          ${h.source_session ? '<span>来源：'+esc(h.source_session)+'</span>' : ""}
+        </div>
+      </div>`).join("");
+  } finally { $("qgo").disabled = false; refreshStatus(); }
+};
+
+// ---- 记忆库 ----
+$("mgo").onclick = loadMemories;
+async function loadMemories() {
+  const r = await (await fetch("/api/memories?subject=" + encodeURIComponent($("ms").value)
+    + ($("mall").checked ? "&all=1" : ""))).json();
+  if (!r.memories || !r.memories.length) { $("mlist").innerHTML =
+    '<div class="hint">（空）</div>'; return; }
+  $("mlist").innerHTML = "<table><tr><th>状态</th><th>类别</th><th>内容</th><th>更新</th><th></th></tr>" +
+    r.memories.map(m => `
+      <tr><td><span class="tag ${esc(m.status)}">${esc(m.status)}</span></td>
+      <td>${esc(m.kind)}</td>
+      <td style="max-width:480px">${esc(m.content.slice(0, 90))}</td>
+      <td style="white-space:nowrap;color:var(--sub)">${esc((m.updated_at||"").slice(5,16))}</td>
+      <td><button class="ghost" onclick="showDetail('${esc(m.memory_id)}')">详情</button></td></tr>`).join("") +
+    "</table>";
+}
+window.showDetail = async mid => {
+  $("mdetail").style.display = "";
+  const r = await (await fetch("/api/memory/" + mid)).json();
+  const m = r.memory, rel = r.related;
+  const ops = m.status === "active"
+    ? `<button class="ghost" onclick="memOp('${mid}','invalidate')">失效</button>
+       <button class="ghost" onclick="memOp('${mid}','forget')">归档</button>`
+    : `<button class="ghost" onclick="memOp('${mid}','reactivate')">恢复</button>`;
+  $("mbody").innerHTML = `
+    <div class="hit"><div>${esc(m.content)}</div>
+      <div class="meta"><span class="tag ${esc(m.status)}">${esc(m.status)}</span>
+        <span class="tag">${esc(m.kind)}</span>
+        <span>v${m.version} · 热度 ${m.hit_count||0} · ${esc(m.created_at||"")}</span>
+        ${m.entities ? "实体：" + esc(m.entities) : ""} ${ops}
+      </div></div>
+    <label>编辑内容（回车保存）</label>
+    <input type="text" id="editc" value="${esc(m.content)}">
+    <button class="ghost" style="margin-top:6px"
+      onclick="memEdit('${mid}')">保存编辑</button>
+    <h3 style="margin-top:14px">溯源链</h3>
+    <div class="hint">${rel.superseded_by
+      ? "被取代 → " + esc((rel.supersede_chain||[]).map(x =>
+          x.memory_id + "(" + x.status + ")").join(" → "))
+      : "（无取代记录）"}
+      ${rel.supersedes && rel.supersedes.length
+        ? "｜取代过 " + rel.supersedes.length + " 条" : ""}</div>
+    <h3 style="margin-top:14px">事件审计</h3>
+    ${r.events.map(e => `<div class="ev"><span class="t">${esc(e.ts)}</span>
+      <b>${esc(e.op)}</b> ${esc(e.note||"")} <span class="t">by ${esc(e.actor)}</span></div>`).join("")}`;
+};
+window.memOp = async (mid, op) => {
+  await fetch("/api/memory/" + op, {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({memory_id: mid})});
+  loadMemories(); showDetail(mid);
+};
+window.memEdit = async mid => {
+  const r = await (await fetch("/api/memory/edit", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({memory_id: mid, content: $("editc").value})})).json();
+  alert(r.ok ? "已保存（版本+1）" : "保存失败"); loadMemories(); showDetail(mid);
+};
+
+// ---- 写入 ----
+$("wgo").onclick = async () => {
+  const r = await (await fetch("/api/write", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({content:$("wc").value, kind:$("wk").value,
+      subject:$("ws").value,
+      entities:($("we").value||"").split(/[,，]/).filter(Boolean)})})).json();
+  $("wout").textContent = r.error ? ("出错：" + r.error)
+    : ("新增 " + (r.added||[]).length + " 条" +
+       (r.deduped && r.deduped.length ? "，判重丢弃 " + r.deduped.length + " 条" : "") +
+       (r.invalidated && r.invalidated.length ? "，冲突失效旧条 " + r.invalidated.length + " 条" : "") +
+       (r.profile_updated ? "，画像已更新" : ""));
+};
+$("ego").onclick = async () => {
+  $("ego").disabled = true; $("eout").textContent = "抽取中…";
+  try {
+    const r = await (await fetch("/api/extract", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({user_msg:$("eu").value, ai_msg:$("ea").value,
+        custom_instructions:$("ec").value})})).json();
+    $("eout").innerHTML = (r.items||[]).length
+      ? r.items.map(i => `<div class="hit">[${esc(i.kind)}] ${esc(i.content)}
+          ${i.entities ? i.entities.map(e=>'<span class="tag">@'+esc(e)+'</span>').join("") : ""}
+          </div>`).join("") + '<button class="act" onclick="writeExtracted()">一键写入</button>'
+      : "（无可记内容）";
+    window._ext = r.items || [];
+  } finally { $("ego").disabled = false; }
+};
+window.writeExtracted = async () => {
+  for (const it of window._ext)
+    await fetch("/api/write", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({items:[it], subject:$("ws").value || "me"})});
+  $("eout").textContent = "已写入 " + window._ext.length + " 条";
+};
+
+// ---- 画像 ----
+$("pgo").onclick = async () => {
+  const p = await (await fetch("/api/profile?subject=" + $("ps").value)).json();
+  $("pout").textContent = JSON.stringify(p, null, 2);
+  const e = await (await fetch("/api/episodes?subject=" + $("ps").value)).json();
+  $("eps").innerHTML = (e.episodes||[]).length
+    ? e.episodes.map(x => `<div class="ev"><span class="t">${esc(x.ts)}</span>${esc(x.summary)}</div>`).join("")
+    : '<div class="hint">（空）</div>';
+};
+
+// ---- 工具 ----
+$("igo").onclick = async () => {
+  $("igo").disabled = true; $("iout").textContent = "入库中（大目录可能较慢）…";
+  try {
+    const r = await (await fetch("/api/ingest", {method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({folder:$("if_").value, subject:$("is").value})})).json();
+    $("iout").textContent = r.error ? ("出错：" + r.error)
+      : `完成：${r.files} 个文件 / 新增 ${r.chunks} 块 / 去重 ${r.deduped} 块 / 挂原件 ${r.files_attached} 个`;
+  } finally { $("igo").disabled = false; }
+};
+$("cgo").onclick = async () => {
+  const r = await (await fetch("/api/consolidate", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({subject:$("cs").value || null,
+      dry_run:$("cdry").checked})})).json();
+  $("cout").textContent = r.error ? ("出错：" + r.error)
+    : `扫描 ${r.scanned} 条：判重合并 ${r.merged} / 冲突消解 ${r.conflicts} / LLM 裁决 ${r.llm_judged}` +
+      ($("cdry").checked ? "（dry-run，未动库）" : "");
+};
+$("bgo").onclick = async () => {
+  $("bgo").disabled = true; $("bout").textContent = "运行中…";
+  const j = await (await fetch("/api/bench")).json();
+  const poll = setInterval(async () => {
+    const r = await (await fetch("/api/job?id=" + j.job)).json();
+    if (r.state === "running") return;
+    clearInterval(poll); $("bgo").disabled = false;
+    if (r.state === "error") { $("bout").textContent = r.error; return; }
+    const rep = r.report;
+    $("bout").textContent =
+      `模式：${rep.mode}  命中 ${rep.ok}/${rep.total}\n` +
+      Object.entries(rep.categories).map(([c, v]) => `  ${c}: ${v.ok}/${v.total}`).join("\n") +
+      "\n\n" + rep.results.map(x => (x.ok ? "✓ " : "✗ ") + x.q +
+        (x.ok ? "" : "　→ " + x.hits.slice(0,2).join(" | ").slice(0,60))).join("\n");
+  }, 2000);
+};
+</script>
+</body>
+</html>
